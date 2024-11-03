@@ -8,37 +8,108 @@
     .container { margin: 20px; }
     .form-group { margin: 10px 0; }
     #status { margin-top: 20px; padding: 10px; background: #f0f0f0; }
+    .product-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+    .product-card { border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+    .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+    .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .nav-tab { padding: 10px; cursor: pointer; border: 1px solid #ddd; }
+    .nav-tab.active { background: #007bff; color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Faro Monitoring Demo</h1>
-    
-    <div class="form-group">
-      <h2>Create User</h2>
-      <form id="userForm">
+    <h1>Shopping App with Monitoring</h1>
+
+    <!-- Login Form -->
+    <div id="loginSection" class="form-group">
+      <h2>Login</h2>
+      <form id="loginForm">
         <div>
-          <label for="email">Email:</label>
-          <input type="email" id="email" name="email" required>
+          <label for="loginUsername">Username:</label>
+          <input type="text" id="loginUsername" name="username" value="admin" required>
         </div>
         <div>
-          <label for="username">Username:</label>
-          <input type="text" id="username" name="username" required>
+          <label for="loginPassword">Password:</label>
+          <input type="password" id="loginPassword" name="password" value="admin" required>
         </div>
-        <button type="submit">Create User</button>
+        <button type="submit">Login</button>
       </form>
     </div>
 
-    <div class="form-group">
-      <h2>Actions</h2>
-      <button id="fetchData">Fetch Data</button>
-      <button id="simulateError">Simulate Error</button>
-      <button id="pauseMonitoring">Pause Monitoring</button>
-      <button id="resumeMonitoring">Resume Monitoring</button>
+    <!-- Main Content (hidden until logged in) -->
+    <div id="mainContent" style="display: none;">
+      <!-- Navigation Tabs -->
+      <div class="nav-tabs">
+        <div class="nav-tab active" data-tab="products">Products</div>
+        <div class="nav-tab" data-tab="cart">Cart</div>
+        <div class="nav-tab" data-tab="orders">Orders</div>
+      </div>
+
+      <!-- Products Tab -->
+      <div id="productsTab" class="tab-content active">
+        <h2>Available Products</h2>
+        <div id="productList" class="product-list">
+          <!-- Products will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Cart Tab -->
+      <div id="cartTab" class="tab-content">
+        <h2>Shopping Cart</h2>
+        <div id="cartItems">
+          <!-- Cart items will be loaded here -->
+        </div>
+        <div id="cartTotal">Total: $0.00</div>
+        <button id="checkoutButton">Proceed to Checkout</button>
+      </div>
+
+      <!-- Orders Tab -->
+      <div id="ordersTab" class="tab-content">
+        <h2>Your Orders</h2>
+        <div id="orderList">
+          <!-- Orders will be loaded here -->
+        </div>
+      </div>
     </div>
 
     <div id="status"></div>
   </div>
+
+  <!-- Templates -->
+  <template id="productTemplate">
+    <div class="product-card">
+      <h3 class="product-name"></h3>
+      <p class="product-description"></p>
+      <p class="product-price"></p>
+      <button class="add-to-cart">Add to Cart</button>
+    </div>
+  </template>
+
+  <template id="cartItemTemplate">
+    <div class="cart-item">
+      <span class="item-name"></span>
+      <span class="item-quantity">
+        <button class="decrease-quantity">-</button>
+        <span class="quantity-value"></span>
+        <button class="increase-quantity">+</button>
+      </span>
+      <span class="item-price"></span>
+      <button class="remove-item">Remove</button>
+    </div>
+  </template>
+
+  <template id="orderTemplate">
+    <div class="order-item">
+      <h4>Order #<span class="order-id"></span></h4>
+      <p>Date: <span class="order-date"></span></p>
+      <p>Total: <span class="order-total"></span></p>
+      <div class="order-items">
+        <!-- Order items will be listed here -->
+      </div>
+    </div>
+  </template>
 
   <script type="module" src="/script.js"></script>
 </body>

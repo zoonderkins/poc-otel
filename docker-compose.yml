@@ -31,8 +31,11 @@ services:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - backend
       - alloy
+      - auth-service
+      - product-service
+      - cart-service
+      - order-service
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
       interval: 10s
@@ -42,22 +45,101 @@ services:
     networks:
       - monitoring_network
 
-  backend:
+  auth-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: auth-service/Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3001"
     volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - ./backend/shared:/app/shared
+      - ./backend/auth-service:/app/auth-service
+      - ./backend/db.json:/app/shared/db.json
     environment:
-      - PORT=3000
+      - PORT=3001
+      - JWT_SECRET=your-secret-key
     depends_on:
       - alloy
-      - tempo
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - monitoring_network
+
+  product-service:
+    build:
+      context: ./backend
+      dockerfile: product-service/Dockerfile
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/shared:/app/shared
+      - ./backend/product-service:/app/product-service
+      - ./backend/db.json:/app/shared/db.json
+    environment:
+      - PORT=3002
+      - JWT_SECRET=your-secret-key
+    depends_on:
+      - alloy
+      - auth-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - monitoring_network
+
+  cart-service:
+    build:
+      context: ./backend
+      dockerfile: cart-service/Dockerfile
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./backend/shared:/app/shared
+      - ./backend/cart-service:/app/cart-service
+      - ./backend/db.json:/app/shared/db.json
+    environment:
+      - PORT=3003
+      - JWT_SECRET=your-secret-key
+    depends_on:
+      - alloy
+      - auth-service
+      - product-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - monitoring_network
+
+  order-service:
+    build:
+      context: ./backend
+      dockerfile: order-service/Dockerfile
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./backend/shared:/app/shared
+      - ./backend/order-service:/app/order-service
+      - ./backend/db.json:/app/shared/db.json
+    environment:
+      - PORT=3004
+      - JWT_SECRET=your-secret-key
+    depends_on:
+      - alloy
+      - auth-service
+      - cart-service
+      - product-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3004/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -78,8 +160,6 @@ services:
     volumes:
       - ./tempo/tempo.yaml:/etc/tempo.yaml
       - tempo-data:/tmp/tempo
-    depends_on:
-      - mimir
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/ready"]
       interval: 10s
@@ -115,11 +195,11 @@ services:
     volumes:
       - ./mimir/mimir.yaml:/etc/mimir.yaml
       - mimir-data:/tmp/mimir
-    # healthcheck:
-    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9009/ready"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9009/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
     networks:
       - monitoring_network
@@ -133,4 +213,4 @@ volumes:
 networks:
   monitoring_network:
     external: true
-    name: monitoring_network
+    name: monitoring_network`

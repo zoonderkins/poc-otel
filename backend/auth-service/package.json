@@ -1,14 +1,10 @@
 {
-  "name": "backend",
+  "name": "auth-service",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.52.0",
@@ -25,4 +21,4 @@
     "bcryptjs": "^2.4.3",
     "uuid": "^9.0.0"
   }
-}
+} 

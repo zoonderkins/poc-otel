@@ -1,0 +1,32 @@
+{
+  "users": [],
+  "sessions": [],
+  "products": [
+    {
+      "id": "1",
+      "name": "Gaming Mouse",
+      "price": 59.99,
+      "description": "High-precision gaming mouse"
+    },
+    {
+      "id": "2",
+      "name": "Mechanical Keyboard",
+      "price": 129.99,
+      "description": "RGB mechanical keyboard"
+    },
+    {
+      "id": "3",
+      "name": "Gaming Headset",
+      "price": 89.99,
+      "description": "7.1 surround sound headset"
+    },
+    {
+      "id": "4",
+      "name": "Gaming Monitor",
+      "price": 299.99,
+      "description": "144Hz gaming monitor"
+    }
+  ],
+  "carts": [],
+  "orders": []
+} 
