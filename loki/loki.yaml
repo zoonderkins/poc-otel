@@ -3,6 +3,9 @@ auth_enabled: false
 server:
   http_listen_port: 3100
 
+common:
+  path_prefix: /tmp/loki
+
 ingester:
   lifecycler:
     address: 127.0.0.1
@@ -16,30 +19,46 @@ ingester:
 
 schema_config:
   configs:
-    - from: 2020-05-15
-      store: tsdb
+    - from: 2020-10-24
+      store: boltdb-shipper
       object_store: filesystem
-      schema: v13
+      schema: v11
       index:
         prefix: index_
         period: 24h
 
 storage_config:
+  boltdb_shipper:
+    active_index_directory: /tmp/loki/boltdb-shipper-active
+    cache_location: /tmp/loki/boltdb-shipper-cache
+    cache_ttl: 24h
   filesystem:
     directory: /tmp/loki/chunks
 
 limits_config:
+  max_entries_limit_per_query: 5000
   reject_old_samples: true
   reject_old_samples_max_age: 168h
-  allow_structured_metadata: true
+  allow_structured_metadata: false
 
-common:
-  path_prefix: /tmp/loki
+compactor:
+  working_directory: /tmp/loki/compactor
+
+ruler:
   storage:
-    filesystem:
-      chunks_directory: /tmp/loki/chunks
-      rules_directory: /tmp/loki/rules
-  replication_factor: 1
+    type: local
+    local:
+      directory: /tmp/loki/rules
+  rule_path: /tmp/loki/rules-temp
+  alertmanager_url: http://localhost:9093
   ring:
     kvstore:
       store: inmemory
+  enable_api: true
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100

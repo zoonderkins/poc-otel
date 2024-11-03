@@ -11,7 +11,7 @@ services:
       - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
       - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/admin_password
     ports:
-      - "3001:3000"
+      - "3333:3000"
     networks:
       - monitoring_network
 

@@ -5,11 +5,34 @@ distributor:
   receivers:
     otlp:
       protocols:
-        grpc:
         http:
+          endpoint: "0.0.0.0:4318"
+        grpc:
+          endpoint: "0.0.0.0:4317"
 
 storage:
   trace:
     backend: local
     local:
-      path: /tmp/tempo/traces
+      path: /tmp/tempo/blocks
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: docker-compose
+  storage:
+    path: /tmp/tempo/generator/wal
+
+overrides:
+  metrics_generator_processors: [service-graphs, span-metrics]
+
+usage_report:
+  reporting_enabled: false

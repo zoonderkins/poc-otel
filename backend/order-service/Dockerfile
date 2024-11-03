@@ -1,21 +1,18 @@
-FROM node:22-alpine
+FROM golang:1.23-alpine
 
 WORKDIR /app
 
-# Copy shared files
-COPY shared/ ./shared/
+# Copy the entire backend directory
+COPY . .
 
-# Copy package files
-COPY order-service/package*.json ./
+# Download all dependencies
+RUN go mod download
 
-# Install dependencies
-RUN npm install
+# Build the application
+RUN go build -o main ./order-service
 
-# Copy service source code
-COPY order-service/ ./
-
-# Expose the port
+# Expose port
 EXPOSE 3004
 
-# Start the service
-CMD ["npm", "start"] 
+# Run the executable
+CMD ["./main"]

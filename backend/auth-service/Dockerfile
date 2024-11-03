@@ -1,21 +1,17 @@
-FROM node:22-alpine
+FROM golang:1.21-alpine
 
 WORKDIR /app
 
-# Copy shared files
+# Copy only necessary files
 COPY shared/ ./shared/
+COPY auth-service/ ./auth-service/
+COPY go.mod go.sum ./
 
-# Copy package files
-COPY auth-service/package*.json ./
+# Download dependencies
+RUN go mod download
 
-# Install dependencies
-RUN npm install
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./auth-service
 
-# Copy service source code
-COPY auth-service/ ./
-
-# Expose the port
-EXPOSE 3001
-
-# Start the service
-CMD ["npm", "start"] 
+# Run the binary
+CMD ["./main"] 

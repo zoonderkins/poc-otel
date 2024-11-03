@@ -1,21 +1,26 @@
-FROM node:22-alpine
+FROM golang:1.23-alpine AS builder
 
+# Set working directory
+WORKDIR /build
+
+# Copy the entire backend directory
+COPY . .
+
+# Set working directory to cart-service
+WORKDIR /build/cart-service
+
+# Download dependencies
+RUN go mod download
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
+
+# Create a minimal production image
+FROM alpine:latest
 WORKDIR /app
 
-# Copy shared files
-COPY shared/ ./shared/
+# Copy the binary from builder
+COPY --from=builder /build/cart-service/main .
 
-# Copy package files
-COPY cart-service/package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy service source code
-COPY cart-service/ ./
-
-# Expose the port
-EXPOSE 3003
-
-# Start the service
-CMD ["npm", "start"] 
+# Run the binary
+CMD ["./main"]
