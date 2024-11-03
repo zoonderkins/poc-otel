@@ -50,7 +50,7 @@ services:
       context: ./backend
       dockerfile: auth-service/Dockerfile
     ports:
-      - "3001:3001"
+      - "3011:3001"
     volumes:
       - ./backend/shared:/app/shared
       - ./backend/auth-service:/app/auth-service
@@ -74,7 +74,7 @@ services:
       context: ./backend
       dockerfile: product-service/Dockerfile
     ports:
-      - "3002:3002"
+      - "3012:3002"
     volumes:
       - ./backend/shared:/app/shared
       - ./backend/product-service:/app/product-service
@@ -99,7 +99,7 @@ services:
       context: ./backend
       dockerfile: cart-service/Dockerfile
     ports:
-      - "3003:3003"
+      - "3013:3003"
     volumes:
       - ./backend/shared:/app/shared
       - ./backend/cart-service:/app/cart-service
@@ -125,7 +125,7 @@ services:
       context: ./backend
       dockerfile: order-service/Dockerfile
     ports:
-      - "3004:3004"
+      - "3014:3004"
     volumes:
       - ./backend/shared:/app/shared
       - ./backend/order-service:/app/order-service
@@ -212,5 +212,4 @@ volumes:
 
 networks:
   monitoring_network:
-    external: true
     name: monitoring_network`
