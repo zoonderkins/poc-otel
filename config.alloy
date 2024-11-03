@@ -1,0 +1,93 @@
+logging {
+	level = "debug"
+	format = "logfmt"
+	write_to = [loki.relabel.alloy_logs.receiver]
+}
+
+loki.relabel "alloy_logs" {
+	rule {
+		target_label = "app_name"
+		replacement = "alloy"
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.relabel "frontend_logs" {
+
+	rule {
+		target_label = "job"
+		replacement = "frontend"
+	}
+
+	rule {
+		target_label = "app_name"
+		replacement = "frontend"
+	}
+
+	rule {
+		source_labels = ["traceId"]
+		target_label = "traceID"
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.relabel "backend_logs" {
+
+	rule {
+		target_label = "job"
+		replacement = "backend"
+	}
+
+	rule {
+		target_label = "app_name"
+		replacement = "backend"
+	}
+
+	rule {
+		source_labels = ["traceId"]
+		target_label = "traceID"
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
+
+tracing {
+	sampling_fraction = 1
+	write_to = [otelcol.exporter.otlp.traces.input]
+}
+
+faro.receiver "integrations_app_agent_receiver" {
+	server {
+        listen_address = "0.0.0.0"		
+		cors_allowed_origins = ["*"]
+		api_key = "asdf"
+
+        rate_limiting {
+            rate = 100
+        }
+	}
+    sourcemaps { }
+
+	output {
+		logs = [loki.relabel.frontend_logs.receiver]
+		traces = [otelcol.exporter.otlp.traces.input]
+	}
+}
+
+otelcol.exporter.otlp "traces" {
+	client {
+		endpoint = "http://tempo:4318"
+        tls {
+            insecure             = true
+            insecure_skip_verify = true
+        }
+	}
+}

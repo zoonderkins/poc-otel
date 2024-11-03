@@ -1,0 +1,24 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Frontend for Alloy application",
+  "main": "script.js",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "serve -s dist -l 80 --single"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@grafana/faro-web-sdk": "^1.11.0",
+    "@grafana/faro-web-tracing": "^1.11.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "serve": "^14.2.1"
+  }
+}

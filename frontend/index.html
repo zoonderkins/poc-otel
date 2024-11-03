@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frontend App with Faro Monitoring</title>
+  <style>
+    .container { margin: 20px; }
+    .form-group { margin: 10px 0; }
+    #status { margin-top: 20px; padding: 10px; background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Faro Monitoring Demo</h1>
+    
+    <div class="form-group">
+      <h2>Create User</h2>
+      <form id="userForm">
+        <div>
+          <label for="email">Email:</label>
+          <input type="email" id="email" name="email" required>
+        </div>
+        <div>
+          <label for="username">Username:</label>
+          <input type="text" id="username" name="username" required>
+        </div>
+        <button type="submit">Create User</button>
+      </form>
+    </div>
+
+    <div class="form-group">
+      <h2>Actions</h2>
+      <button id="fetchData">Fetch Data</button>
+      <button id="simulateError">Simulate Error</button>
+      <button id="pauseMonitoring">Pause Monitoring</button>
+      <button id="resumeMonitoring">Resume Monitoring</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script type="module" src="/script.js"></script>
+</body>
+</html>
