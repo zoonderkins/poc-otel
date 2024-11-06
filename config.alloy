@@ -10,19 +10,30 @@ loki.relabel "alloy_logs" {
 		replacement = "alloy"
 	}
 
-	forward_to = [loki.write.default.receiver]
+	rule {
+		target_label = "level"
+		source_labels = ["level"]
+		regex = "(debug|info|warn|error)"
+	}
+
+	forward_to = [loki.write.loki.receiver]
 }
 
 loki.relabel "frontend_logs" {
-
 	rule {
 		target_label = "job"
 		replacement = "frontend"
 	}
 
 	rule {
+		source_labels = ["app_name"]
 		target_label = "app_name"
-		replacement = "frontend"
+	}
+
+	rule {
+		target_label = "level"
+		source_labels = ["level"]
+		regex = "(debug|info|warn|error)"
 	}
 
 	rule {
@@ -30,75 +41,66 @@ loki.relabel "frontend_logs" {
 		target_label = "traceID"
 	}
 
-	forward_to = [loki.write.default.receiver]
+	rule {
+		source_labels = ["meta_browser_userAgent"]
+		target_label = "browser"
+	}
+
+	rule {
+		source_labels = ["meta_browser_locale"]
+		target_label = "locale"
+	}
+
+	rule {
+		source_labels = ["meta_app_version"]
+		target_label = "version"
+	}
+
+	rule {
+		source_labels = ["meta_app_environment"]
+		target_label = "environment"
+	}
+
+	forward_to = [loki.write.loki.receiver]
 }
 
-loki.relabel "backend_logs" {
-
-	rule {
-		target_label = "job"
-		replacement = "backend"
-	}
-
-	rule {
-		target_label = "app_name"
-		replacement = "backend"
-	}
-
-	rule {
-		source_labels = ["traceId"]
-		target_label = "traceID"
-	}
-
-	forward_to = [loki.write.default.receiver]
-}
-
-loki.write "default" {
+loki.write "loki" {
 	endpoint {
 		url = "http://loki:3100/loki/api/v1/push"
 	}
 }
 
-tracing {
-	sampling_fraction = 1
-	write_to = [otelcol.exporter.otlp.traces.input]
+otelcol.exporter.otlp "tempo" {
+	client {
+		endpoint = "http://tempo:4317"
+		tls {
+			insecure = true
+			insecure_skip_verify = true
+		}
+	}
 }
 
-faro.receiver "integrations_app_agent_receiver" {
+faro.receiver "faro" {
 	server {
-        listen_address = "0.0.0.0"		
+		listen_address = "0.0.0.0"
 		cors_allowed_origins = ["*"]
 		api_key = "asdf"
-
-        rate_limiting {
-            rate = 100
-        }
 	}
-    sourcemaps { }
+	
+	sourcemaps { }
+	
+	extra_log_labels = {
+		service = "frontend",
+		environment = "development",
+	}
 
 	output {
-		logs = [loki.relabel.frontend_logs.receiver]
-		traces = [otelcol.exporter.otlp.traces.input]
+		logs   = [loki.relabel.frontend_logs.receiver]
+		traces = [otelcol.exporter.otlp.tempo.input]
 	}
 }
 
-otelcol.exporter.otlp "traces" {
-	client {
-		endpoint = "tempo:4317"
-        tls {
-            insecure             = true
-            insecure_skip_verify = true
-        }
-	}
-    sending_queue {
-        enabled = true
-        num_consumers = 4
-        queue_size = 100
-    }
-    retry_on_failure {
-        enabled = true
-        initial_interval = "5s"
-        max_interval = "30s"
-        max_elapsed_time = "300s"
-    }
+tracing {
+	sampling_fraction = 1
+	write_to = [otelcol.exporter.otlp.tempo.input]
 }

@@ -1,0 +1,40 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:4318"
+      grpc:
+        endpoint: "0.0.0.0:4317"
+
+processors: 
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 2000
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  logging:
+    loglevel: debug
+  otlp/elastic: 
+    endpoint: "${ELASTIC_APM_SERVER_URL}"
+    headers:
+      Authorization: "Bearer ${ELASTIC_APM_SECRET_TOKEN}"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging, otlp/elastic]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging, otlp/elastic]
+    logs: 
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging, otlp/elastic] 

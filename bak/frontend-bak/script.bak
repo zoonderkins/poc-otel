@@ -10,50 +10,50 @@ import {
 } from '@grafana/faro-web-sdk';
 import { TracingInstrumentation } from '@grafana/faro-web-tracing';
 
-console.log('Starting Faro initialization...');
+// console.log('Starting Faro initialization...');
 
-// Initialize Faro with tracing
-const faroInstance = initializeFaro({
-    instrumentations: [
-        new ErrorsInstrumentation(),
-        new WebVitalsInstrumentation(),
-        new ConsoleInstrumentation({
-            disabledLevels: [LogLevel.TRACE, LogLevel.ERROR],
-        }),
-        new SessionInstrumentation(),
-        new TracingInstrumentation({
-            instrumentationOptions: {
-                propagateTraceHeaderCorsUrls: [/.*/],
-            }
-        })
-    ],
-    transports: [
-        new FetchTransport({
-            url: '/collect',
-            apiKey: 'asdf',
-            headers: {
-                'Content-Type': 'application/vnd.faro.telemetry+json',
-                'Accept': 'application/json'
-            },
-            requestInit: {
-                mode: 'cors',
-                credentials: 'omit'
-            }
-        }),
-        new ConsoleTransport()
-    ],
-    app: {
-        name: 'frontend',
-        version: '2.0.0',
-        environment: 'development'
-    },
-    meta: {
-        browser: {
-            locale: navigator.language,
-            userAgent: navigator.userAgent,
-        }
-    }
-});
+// // Initialize Faro with tracing
+// const faroInstance = initializeFaro({
+//     instrumentations: [
+//         new ErrorsInstrumentation(),
+//         new WebVitalsInstrumentation(),
+//         new ConsoleInstrumentation({
+//             disabledLevels: [LogLevel.TRACE, LogLevel.ERROR],
+//         }),
+//         new SessionInstrumentation(),
+//         new TracingInstrumentation({
+//             instrumentationOptions: {
+//                 propagateTraceHeaderCorsUrls: [/.*/],
+//             }
+//         })
+//     ],
+//     transports: [
+//         new FetchTransport({
+//             url: '/collect',
+//             apiKey: 'asdf',
+//             headers: {
+//                 'Content-Type': 'application/vnd.faro.telemetry+json',
+//                 'Accept': 'application/json'
+//             },
+//             requestInit: {
+//                 mode: 'cors',
+//                 credentials: 'omit'
+//             }
+//         }),
+//         new ConsoleTransport()
+//     ],
+//     app: {
+//         name: 'frontend',
+//         version: '2.0.0',
+//         environment: 'development'
+//     },
+//     meta: {
+//         browser: {
+//             locale: navigator.language,
+//             userAgent: navigator.userAgent,
+//         }
+//     }
+// });
 
 // State management
 let currentUser = null;
@@ -61,7 +61,7 @@ let cartItems = [];
 
 // Helper function to get auth headers
 function getAuthHeaders() {
-    const traceContext = window.faroInstance?.api?.getTraceContext() || {};
+    // const traceContext = window.faroInstance?.api?.getTraceContext() || {};
     
     return {
         'Content-Type': 'application/json',
@@ -102,15 +102,15 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             await loadCart();
             await loadOrders();
 
-            faroInstance.api.pushEvent('user-logged-in', {
-                username: currentUser.username
-            });
+            // faroInstance.api.pushEvent('user-logged-in', {
+            //     username: currentUser.username
+            // });
         } else {
             throw new Error(data.error || 'Login failed');
         }
     } catch (error) {
         document.getElementById('status').textContent = `Login error: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 });
 
@@ -136,14 +136,14 @@ async function loadProducts() {
         });
     } catch (error) {
         document.getElementById('status').textContent = `Error loading products: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 }
 
 // Cart management
 async function loadCart() {
     try {
-        const traceContext = window.faroInstance?.api?.getTraceContext() || {};
+        // const traceContext = window.faroInstance?.api?.getTraceContext() || {};
         
         const response = await fetch(`/api/cart/${currentUser.userId}`, {
             headers: {
@@ -157,7 +157,7 @@ async function loadCart() {
         updateCartDisplay();
     } catch (error) {
         document.getElementById('status').textContent = `Error loading cart: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 }
 
@@ -183,14 +183,14 @@ async function addToCart(product) {
         if (!response.ok) throw new Error('Failed to add item to cart');
         await loadCart();
 
-        faroInstance.api.pushEvent('add-to-cart', {
-            productId: product.id,
-            productName: product.name,
-            price: product.price
-        });
+        // faroInstance.api.pushEvent('add-to-cart', {
+        //     productId: product.id,
+        //     productName: product.name,
+        //     price: product.price
+        // });
     } catch (error) {
         document.getElementById('status').textContent = `Error adding to cart: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 }
 
@@ -205,7 +205,7 @@ async function removeFromCart(productId) {
         await loadCart();
     } catch (error) {
         document.getElementById('status').textContent = `Error removing from cart: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 }
 
@@ -248,7 +248,7 @@ async function updateQuantity(productId, change) {
         await loadCart();
     } catch (error) {
         document.getElementById('status').textContent = `Error updating quantity: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 }
 
@@ -273,7 +273,7 @@ async function loadOrders() {
         });
     } catch (error) {
         document.getElementById('status').textContent = `Error loading orders: ${error.message}`;
-        faroInstance.api.pushError(error);
+    //     faroInstance.api.pushError(error);
     }
 }
 
@@ -294,18 +294,18 @@ document.getElementById('checkoutButton').addEventListener('click', async () => 
         if (!response.ok) throw new Error('Checkout failed');
         const order = await response.json();
 
-        faroInstance.api.pushEvent('checkout-complete', {
-            orderId: order.id,
-            total: order.total,
-            itemCount: order.items.length
-        });
+        // faroInstance.api.pushEvent('checkout-complete', {
+        //     orderId: order.id,
+        //     total: order.total,
+        //     itemCount: order.items.length
+        // });
 
         await loadCart();
         await loadOrders();
         document.getElementById('status').textContent = 'Checkout successful!';
     } catch (error) {
         document.getElementById('status').textContent = `Checkout error: ${error.message}`;
-        faroInstance.api.pushError(error);
+        // faroInstance.api.pushError(error);
     }
 });
 
@@ -320,14 +320,14 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     });
 });
 
-// Initialize Faro error tracking
-window.addEventListener('error', (event) => {
-    faroInstance.api.pushError(event.error);
-});
+// // Initialize Faro error tracking
+// window.addEventListener('error', (event) => {
+//     faroInstance.api.pushError(event.error);
+// });
 
-window.addEventListener('unhandledrejection', (event) => {
-    faroInstance.api.pushError(event.reason);
-});
+// window.addEventListener('unhandledrejection', (event) => {
+//     faroInstance.api.pushError(event.reason);
+// });
 
-// Make faroInstance globally available
-window.faroInstance = faroInstance;
+// // Make faroInstance globally available
+// window.faroInstance = faroInstance;

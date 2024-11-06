@@ -13,15 +13,35 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+type User struct {
+	ID       string `json:"id,string"`
+	Username string `json:"username"`
+	Password string `json:"password,omitempty"`
+	Email    string `json:"email"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type RegisterRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+type AuthResponse struct {
+	Token string `json:"token"`
+	User  User   `json:"user"`
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	tracer := otel.Tracer("auth-service")
 	_, span := tracer.Start(r.Context(), "login")
 	defer span.End()
 
-	var loginReq struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+	var loginReq LoginRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo App</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
+  <!-- Elastic APM Script -->
+  <script src="elastic-apm-rum.umd.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        const envVars = {
+          ELASTIC_APM_SERVER_URL: "http://localhost:8080/http://localhost:8200"
+        }
+
+        if (typeof elasticApm !== 'undefined') {
+          console.log("Initializing APM RUM")
+          elasticApm.init({
+            serviceName: 'jquery-app',
+            serverUrl: envVars.ELASTIC_APM_SERVER_URL,
+            serviceVersion: '1.0.0',
+            environment: 'development',
+            propagateTracestate: true
+          });
+        } else {
+          console.warn("elasticApm is not loaded")
+        }
+      } catch (e) {
+        console.error("Failed to initialize APM:", e);
+      }
+    });
+  </script>
+
+  <!-- Grafana Faro Script -->
+  <script>
+    (function() {
+      window.faroReady = new Promise((resolve) => {
+        var webSdkScript = document.createElement("script");
+        webSdkScript.src = "https://unpkg.com/@grafana/faro-web-sdk@1.11.0/dist/bundle/faro-web-sdk.iife.js";
+        webSdkScript.crossOrigin = "anonymous";
+
+        webSdkScript.onload = () => {
+          window.faro = window.GrafanaFaroWebSdk.initializeFaro({
+            url: '/collect',
+            apiKey: 'asdf',
+            app: {
+              name: 'jquery-app',
+              version: '1.1.0',
+              environment: 'development'
+            },
+            instrumentations: [
+              ...window.GrafanaFaroWebSdk.getWebInstrumentations({
+                captureConsole: true,
+                captureErrors: true,
+                captureWebVitals: true,
+              }),
+            ],
+            transports: [
+              new window.GrafanaFaroWebSdk.ConsoleTransport(),
+              new window.GrafanaFaroWebSdk.FetchTransport({
+                url: '/collect',
+                apiKey: 'asdf',
+                headers: {
+                  'Content-Type': 'application/vnd.faro.telemetry+json',
+                  'Accept': 'application/json'
+                }
+              })
+            ],
+            meta: {
+              browser: {
+                locale: navigator.language,
+                userAgent: navigator.userAgent,
+              },
+              service: 'jquery-app'
+            }
+          });
+
+          var webTracingScript = document.createElement("script");
+          webTracingScript.src = "https://unpkg.com/@grafana/faro-web-tracing@1.11.0/dist/bundle/faro-web-tracing.iife.js";
+          webTracingScript.crossOrigin = "anonymous";
+
+          webTracingScript.onload = () => {
+            window.faro.instrumentations.add(
+              new window.GrafanaFaroWebTracing.TracingInstrumentation({
+                instrumentationOptions: {
+                  propagateTraceHeaderCorsUrls: [/.*/],
+                },
+              })
+            );
+            resolve(window.faro);
+          };
+          document.head.appendChild(webTracingScript);
+        };
+
+        document.head.appendChild(webSdkScript);
+      });
+    })();
+  </script>
+  
+</head>
+
+<body>
+
+  <div class="container">
+    <div class="row">
+      <div class="col">
+        <h1>Todo List</h1>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <form>
+          <div class="mb-3">
+            <label for="input-title" class="form-label">Title</label>
+            <input class="form-control" id="input-title">
+          </div>
+          <div class="mb-3">
+            <label for="input-description" class="form-label">Description</label>
+            <input class="form-control" id="input-description">
+          </div>
+          <div class="text-center mt-3">
+            <button id="btn-add-todo" class="btn btn-primary mx-2">Add Todo</button>
+            <button id="btn-trigger-backend-error" class="btn btn-danger mx-2">Trigger Backend Error</button>
+            <button id="btn-tirgger-frontend-error" class="btn btn-warning mx-2">Trigger Frontend Error</button>
+            <button id="btn-console-log" class="btn btn-info mx-2">Console Log</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="row" id="loading">
+      <div class="col text-center">
+        <div class="spinner-border my-3" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    </div>
+    <div class="row" id="items">
+      <!-- Todo items will be rendered here -->
+    </div>
+
+  <script>
+    const API_BASE_URL = '';
+
+    function renderTodos(todos) {
+      const items = $("#items");
+      items.empty();
+      
+      if (!todos || !Array.isArray(todos)) {
+        items.append('<div class="col-12 text-center"><p>No todos available</p></div>');
+        return;
+      }
+
+      if (todos.length === 0) {
+        items.append('<div class="col-12 text-center"><p>No todos yet. Add your first todo!</p></div>');
+        return;
+      }
+
+      todos.forEach(todo => {
+        const card = `
+        <div class="col-lg-3 col-md-6">
+          <div class="card my-3">
+            <div class="card-body">
+              <h5 class="card-title">${todo.title}</h5>
+              <h6>
+                <span class="badge bg-${todo.completed ? 'success' : 'warning'}">${todo.completed ? 'Completed' : 'Pending'}</span>
+              </h6>
+              <p class="card-text">${todo.description}</p>
+              <div class="text-center">` +
+                (todo.completed ? 
+                  `<button class="btn btn-warning mx-2" onclick="undoCompleteTodo(${todo.id})">Pending</button>` : 
+                  `<button class="btn btn-success mx-2" onclick="completeTodo(${todo.id})">Complete</button>`
+                ) +
+                `<button class="btn btn-danger mx-2" onclick="deleteTodo(${todo.id})">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+        items.append(card);
+      });
+    }
+
+    function fetchTodos() {
+      $("#loading").show();
+      $.ajax({
+        url: `/todos`,
+        type: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        success: function(data) {
+          console.info('Fetched todos:', data);
+          renderTodos(data);
+        },
+        error: function(error) {
+          console.error('Error fetching todos:', error);
+          const items = $("#items");
+          items.empty();
+          items.append('<div class="col-12 text-center"><p class="text-danger">Error loading todos. Please try again later.</p></div>');
+        }
+      }).always(function() {
+        $("#loading").hide();
+      });
+    }
+
+    $(window).on('load', function() {
+      fetchTodos();
+    });
+
+    $("#btn-add-todo").click(function(e) {
+      e.preventDefault();
+      const title = $("#input-title").val();
+      const description = $("#input-description").val();
+      $.ajax({
+        url: `/todos`,
+        type: 'POST',
+        data: JSON.stringify({
+          title: title,
+          description: description,
+          completed: false
+        }),
+        contentType: 'application/json',
+        headers: {
+          'Accept': 'application/json',
+        },
+        success: function(data) {
+          console.info('Todo created:', data);
+          $("#input-title").val('');
+          $("#input-description").val('');
+          fetchTodos();
+        },
+        error: function(error) {
+          console.error('Error creating todo:', error);
+        }
+      });
+    });
+
+    $("#btn-trigger-backend-error").click(function(e) {
+      e.preventDefault();
+      $.ajax({
+        url: `/error`,
+        type: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        success: function(data) {
+          console.log(data);
+        },
+        error: function(error) {
+          console.error('Backend Error:', error);
+          window.alert('Backend Error');
+        }
+      });
+    });
+
+    $("#btn-tirgger-frontend-error").click(function(e) {
+      e.preventDefault();
+      throw new Error('Triggered Frontend Error');
+    });
+
+    $("#btn-console-log").click(function(e) {
+      e.preventDefault();
+      const timestamp = new Date().toISOString();
+      console.debug(`Debug Log: ${timestamp}`);
+      console.log(`Info Log: ${timestamp}`);
+      console.warn(`Warning Log: ${timestamp}`);
+      console.error(`Error Log: ${timestamp}`);
+    });
+
+    function completeTodo(id) {
+      $.ajax({
+        url: `/todos/${id}`,
+        type: 'PUT',
+        data: JSON.stringify({
+          completed: true,
+        }),
+        contentType: 'application/json',
+        headers: {
+          'Accept': 'application/json',
+        },
+        success: function(data) {
+          console.log('Todo completed:', data);
+          fetchTodos();
+        },
+        error: function(error) {
+          console.error('Error completing todo:', error);
+        }
+      });
+    }
+
+    function undoCompleteTodo(id) {
+      $.ajax({
+        url: `/todos/${id}`,
+        type: 'PUT',
+        data: JSON.stringify({
+          completed: false,
+        }),
+        contentType: 'application/json',
+        headers: {
+          'Accept': 'application/json',
+        },
+        success: function(data) {
+          console.log('Todo uncompleted:', data);
+          fetchTodos();
+        },
+        error: function(error) {
+          console.error('Error uncompleting todo:', error);
+        }
+      });
+    }
+
+    function deleteTodo(id) {
+      $.ajax({
+        url: `/todos/${id}`,
+        type: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+        },
+        success: function(data) {
+          console.log('Todo deleted:', data);
+          fetchTodos();
+        },
+        error: function(error) {
+          console.error('Error deleting todo:', error);
+        }
+      });
+    }
+
+    $.ajaxSetup({
+      crossDomain: true,
+      xhrFields: {
+        withCredentials: false
+      },
+      beforeSend: function(xhr) {
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('Content-Type', 'application/json');
+      }
+    });
+
+  </script>
+
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/auto-instrumentations-web@0.42.0/build/src/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/api@1.9.0/build/src/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/sdk-trace-base@1.27.0/build/src/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/sdk-trace-web@1.27.0/build/src/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/resources@1.27.0/build/src/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/semantic-conventions@1.27.0/build/src/trace/SemanticAttributes.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@opentelemetry/exporter-trace-otlp-http@0.54.0/build/src/index.min.js"></script>
+
+
+<script>
+    window.addEventListener('load', () => {
+        const provider = new OpenTelemetryWeb.WebTracerProvider({
+        resource: new OpenTelemetryWeb.Resource({
+          'service.name': 'frontend-service',
+          'deployment.environment': 'development'
+        })
+      });
+
+      const exporter = new OpenTelemetryTraceOtlpHttp.OTLPTraceExporter({
+        url: 'http://localhost:4318/v1/traces'
+      });
+      
+      provider.addSpanProcessor(new OpenTelemetryWeb.SimpleSpanProcessor(exporter));
+      provider.register();
+      
+      // Make tracer available globally
+      window.tracer = provider.getTracer('frontend-tracer');
+      
+      console.log('OpenTelemetry initialized successfully');
+    });
+  </script>
+
+</body>
+
+</html>

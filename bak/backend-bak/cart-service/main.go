@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,13 +15,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yourusername/microservices/shared"
 	"github.com/yourusername/microservices/shared/metrics"
+	"go.elastic.co/apm"
+	"go.elastic.co/apm/module/apmgorilla"
+	"go.elastic.co/apm/module/apmhttp"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 // Product represents a product from the product service
@@ -32,14 +32,14 @@ type Product struct {
 }
 
 type CartItem struct {
-	ProductID string  `json:"productId"`
+	ProductID string  `json:"productId,string"`
 	Quantity  int     `json:"quantity"`
 	Price     float64 `json:"price,omitempty"`
 	Name      string  `json:"productName,omitempty"`
 }
 
 type Cart struct {
-	UserID string     `json:"userId"`
+	UserID string     `json:"userId,string"`
 	Items  []CartItem `json:"items"`
 }
 
@@ -52,29 +52,50 @@ var (
 var tracer = otel.Tracer("cart-service")
 var logger *shared.Logger
 
-func initTracer() (*sdktrace.TracerProvider, error) {
-	exporter, err := otlptracehttp.New(
-		context.Background(),
-		otlptracehttp.WithEndpoint("tempo:4318"),
-		otlptracehttp.WithInsecure(),
-	)
+func main() {
+	// Initialize OpenTelemetry
+	tp, err := shared.InitTracer("cart-service")
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
+	}
+	defer tp.Shutdown(context.Background())
+
+	// Initialize logger
+	logger = shared.NewLogger("cart-service")
+
+	r := mux.NewRouter()
+
+	// Use both OpenTelemetry and Elastic APM middleware
+	r.Use(otelmux.Middleware("cart-service"))
+	r.Use(apmgorilla.Middleware())
+	r.Use(metrics.MetricsMiddleware("cart-service"))
+
+	// Health check endpoint (no auth required)
+	r.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	}).Methods("GET")
+
+	// Cart endpoints with auth
+	r.HandleFunc("/api/cart/{userId}", verifyToken(getCart)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/cart/{userId}/items", verifyToken(addToCart)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/cart/{userId}/items/{productId}", verifyToken(removeFromCart)).Methods("DELETE", "OPTIONS")
+	r.HandleFunc("/api/cart/{userId}", verifyToken(clearCart)).Methods("DELETE", "OPTIONS")
+
+	// Add metrics endpoint
+	r.Handle("/metrics", promhttp.Handler())
+
+	// Wrap the router with APM HTTP middleware
+	handler := apmhttp.Wrap(r)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3003"
 	}
 
-	resource := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceNameKey.String("cart-service"),
-		semconv.DeploymentEnvironmentKey.String("development"),
-	)
-
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(resource),
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-	)
-	otel.SetTracerProvider(tp)
-	return tp, nil
+	log.Printf("Cart service starting on port %s", port)
+	if err := http.ListenAndServe(":"+port, handler); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Add this function to verify JWT token
@@ -106,52 +127,22 @@ func verifyToken(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func main() {
-	tp, err := shared.InitTracer("cart-service")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer tp.Shutdown(context.Background())
-
-	// Initialize logger
-	logger = shared.NewLogger("cart-service")
-
-	r := mux.NewRouter()
-	r.Use(otelmux.Middleware("cart-service"))
-	r.Use(metrics.MetricsMiddleware("cart-service"))
-
-	// Health check endpoint (no auth required)
-	r.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
-	}).Methods("GET")
-
-	// Cart endpoints with auth
-	r.HandleFunc("/api/cart/{userId}", verifyToken(getCart)).Methods("GET", "OPTIONS")
-	r.HandleFunc("/api/cart/{userId}/items", verifyToken(addToCart)).Methods("POST", "OPTIONS")
-	r.HandleFunc("/api/cart/{userId}/items/{productId}", verifyToken(removeFromCart)).Methods("DELETE", "OPTIONS")
-	r.HandleFunc("/api/cart/{userId}", verifyToken(clearCart)).Methods("DELETE", "OPTIONS")
-
-	// Add metrics endpoint
-	r.Handle("/metrics", promhttp.Handler())
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3003"
-	}
-
-	log.Printf("Cart service starting on port %s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
-		log.Fatal(err)
-	}
-}
-
 func getCart(w http.ResponseWriter, r *http.Request) {
+	// OpenTelemetry tracing
 	_, span := tracer.Start(r.Context(), "get-cart")
 	defer span.End()
 
+	// Elastic APM tracing
+	tx := apm.TransactionFromContext(r.Context())
+	apmSpan := tx.StartSpan("get-cart", "custom", nil)
+	defer apmSpan.End()
+
 	vars := mux.Vars(r)
 	userID := vars["userId"]
+
+	// Set context for both tracers
 	span.SetAttributes(attribute.String("user.id", userID))
+	tx.Context.SetUserID(userID)
 
 	mu.RLock()
 	cart, exists := carts[userID]
@@ -191,22 +182,38 @@ func getCart(w http.ResponseWriter, r *http.Request) {
 }
 
 func addToCart(w http.ResponseWriter, r *http.Request) {
+	// OpenTelemetry context
 	ctx := shared.ExtractTraceContextFromRequest(r)
-	tracer := otel.Tracer("cart-service")
-	ctx, span := tracer.Start(ctx, "add_to_cart")
+	_, span := tracer.Start(ctx, "add_to_cart")
 	defer span.End()
+
+	// Elastic APM context
+	tx := apm.TransactionFromContext(r.Context())
+	apmSpan := tx.StartSpan("add-to-cart", "custom", nil)
+	defer apmSpan.End()
 
 	vars := mux.Vars(r)
 	userID := vars["userId"]
+
+	// Set context for both tracers
 	span.SetAttributes(attribute.String("user.id", userID))
+	tx.Context.SetUserID(userID)
+
+	// Add debug logging
+	body, _ := io.ReadAll(r.Body)
+	logger.Info(r.Context(), "Received request body", map[string]interface{}{
+		"body": string(body),
+	})
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	var item CartItem
 	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
-		logger.Info(ctx, "Failed to decode request", map[string]interface{}{
+		logger.Error(r.Context(), "Failed to decode request", err, map[string]interface{}{
 			"error":  err.Error(),
+			"body":   string(body),
 			"userId": userID,
 		})
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 
@@ -217,7 +224,7 @@ func addToCart(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Make request to product service
-	req, err := shared.CreateTracedRequest(ctx, "GET",
+	req, err := shared.CreateTracedRequest(r.Context(), "GET",
 		fmt.Sprintf("http://product-service:3002/api/products/%s", item.ProductID),
 		nil)
 	if err != nil {
@@ -225,10 +232,9 @@ func addToCart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
 		return
 	}
-	req.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 	// Inject trace context
-	shared.InjectTraceContext(ctx, req.Header)
+	shared.InjectTraceContext(r.Context(), req.Header)
 	req.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 	// Forward the Authorization header to the product service
@@ -302,23 +308,23 @@ func addToCart(w http.ResponseWriter, r *http.Request) {
 }
 
 func removeFromCart(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "OPTIONS" {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
+	// OpenTelemetry tracing
 	_, span := tracer.Start(r.Context(), "remove-from-cart")
 	defer span.End()
+
+	// Elastic APM tracing
+	tx := apm.TransactionFromContext(r.Context())
+	apmSpan := tx.StartSpan("remove-from-cart", "custom", nil)
+	defer apmSpan.End()
 
 	vars := mux.Vars(r)
 	userID := vars["userId"]
 	productID := vars["productId"]
 
+	// Set context for both tracers
 	span.SetAttributes(attribute.String("user.id", userID))
 	span.SetAttributes(attribute.String("product.id", productID))
+	tx.Context.SetUserID(userID)
 
 	mu.Lock()
 	cart, exists := carts[userID]
@@ -345,20 +351,21 @@ func removeFromCart(w http.ResponseWriter, r *http.Request) {
 }
 
 func clearCart(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "OPTIONS" {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
+	// OpenTelemetry tracing
 	_, span := tracer.Start(r.Context(), "clear-cart")
 	defer span.End()
 
+	// Elastic APM tracing
+	tx := apm.TransactionFromContext(r.Context())
+	apmSpan := tx.StartSpan("clear-cart", "custom", nil)
+	defer apmSpan.End()
+
 	vars := mux.Vars(r)
 	userID := vars["userId"]
+
+	// Set context for both tracers
 	span.SetAttributes(attribute.String("user.id", userID))
+	tx.Context.SetUserID(userID)
 
 	mu.Lock()
 	delete(carts, userID)

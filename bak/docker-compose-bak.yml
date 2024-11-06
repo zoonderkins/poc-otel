@@ -20,18 +20,22 @@ services:
     restart: always
     networks:
       - monitoring_network
-      - elastic_network
-  jquery-frontend:
+
+  frontend:
     build:
-      context: ./jquery-frontend
+      context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "81:80"
+      - "80:80"
     volumes:
-      - ./jquery-frontend:/usr/share/nginx/html
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - alloy
-      - api-backend
+      - auth-service
+      - product-service
+      - cart-service
+      - order-service
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
       interval: 10s
@@ -40,40 +44,69 @@ services:
     restart: always
     networks:
       - monitoring_network
-      - elastic_network
-  api-backend:
+
+  auth-service:
     build:
-      context: ./api-backend
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: auth-service/Dockerfile
     ports:
-      - "13000:3000"
+      - "13001:3001"
     volumes:
-      - ./api-backend:/app/src:ro
-      - backend-data:/data
-      - ./api-backend/collector.yaml:/etc/otel/collector.yaml
+      - ./backend/shared:/app/shared:ro
+      - ./backend/auth-service:/app/auth-service:ro
+      - backend-data:/app/data
     environment:
-      - PORT=3000
+      - PORT=3001
       - JWT_SECRET=your-secret-key
-      - SERVICE_NAME=api-backend
-      - TEMPO_ENDPOINT=tempo:4318
-      - EXPOSE_PORT=3000
-      - ELASTIC_APM_SERVER_URL=http://apm-server:8200
-      - ELASTIC_APM_SERVICE_NAME=api-backend
-      - ELASTIC_APM_SERVICE_VERSION=1.0.0
-      - ELASTIC_APM_ENVIRONMENT=development
-      - ELASTIC_APM_LOG_LEVEL=debug
-      - ELASTIC_APM_SECRET_TOKEN=secrettokengoeshere
-      - ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0
-      - ELASTIC_APM_CAPTURE_BODY=all
-      - ELASTIC_APM_METRICS_INTERVAL=10s
-      - ELASTIC_APM_SOURCE_LINES_ERROR_APP_FRAMES=5
-      - ELASTIC_APM_SOURCE_LINES_SPAN_APP_FRAMES=5
-      - ELASTIC_APM_SOURCE_LINES_ERROR_LIBRARY_FRAMES=5
-      - ELASTIC_APM_SOURCE_LINES_SPAN_LIBRARY_FRAMES=5
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-      - OTEL_SERVICE_NAME=api-backend
-      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-      - OTEL_COLLECTOR_CONFIG_FILE=/etc/otel/collector.yaml
+    depends_on:
+      - alloy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - monitoring_network
+
+  product-service:
+    build:
+      context: ./backend
+      dockerfile: product-service/Dockerfile
+    ports:
+      - "13002:3002"
+    volumes:
+      - ./backend/shared:/app/shared:ro
+      - ./backend/product-service:/app/product-service:ro
+      - backend-data:/app/data
+    environment:
+      - PORT=3002
+      - JWT_SECRET=your-secret-key
+    depends_on:
+      - alloy
+      - auth-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - monitoring_network
+
+  cart-service:
+    build:
+      context: ./backend
+      dockerfile: cart-service/Dockerfile
+    ports:
+      - "13003:3003"
+    volumes:
+      - ./backend/cart-service:/app/cart-service:ro
+      - backend-data:/app/data
+    environment:
+      - PORT=3003
+      - JWT_SECRET=your-secret-key
+      - SERVICE_NAME=cart-service
     labels: 
       logging: "promtail"
       logging_jobname: "containerlogs"
@@ -85,15 +118,43 @@ services:
         tag: "{{.Name}}"
     depends_on:
       - alloy
+      - auth-service
+      - product-service
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: always
     networks:
       - monitoring_network
-      - elastic_network
+
+  order-service:
+    build:
+      context: ./backend
+      dockerfile: order-service/Dockerfile
+    ports:
+      - "13004:3004"
+    volumes:
+      - ./backend/shared:/app/shared:ro
+      - ./backend/order-service:/app/order-service:ro
+      - backend-data:/app/data
+    environment:
+      - PORT=3004
+      - JWT_SECRET=your-secret-key
+    depends_on:
+      - alloy
+      - auth-service
+      - cart-service
+      - product-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3004/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - monitoring_network
 
   tempo:
     image: grafana/tempo:latest
@@ -103,7 +164,7 @@ services:
       - "9095:9095"   # tempo grpc
       - "14268:14268" # jaeger ingest
       - "4318:4318"   # otlp http
-      - "43117:4317"   # otlp grpc
+      - "4317:4317"   # otlp grpc
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./tempo/tempo.yaml:/etc/tempo.yaml
@@ -116,7 +177,6 @@ services:
     restart: always
     networks:
       - monitoring_network
-      - elastic_network
 
   prometheus:
     image: prom/prometheus:v2.51.1
@@ -131,7 +191,7 @@ services:
       - "9090:9090"
     networks:
       - monitoring_network
-      - elastic_network
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -140,12 +200,10 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
-      - GF_FEATURE_TOGGLES_ENABLE="tempoServiceGraph,traceToMetrics"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     networks:
       - monitoring_network
-      - elastic_network
 
   loki:
     image: grafana/loki:latest
@@ -177,7 +235,6 @@ services:
     networks:
       - monitoring_network
 
-
 volumes:
   alloy-data:
   tempo-data:
@@ -186,8 +243,6 @@ volumes:
   backend-data:
 
 networks:
-  elastic_network:
-    name: elastic
-    external: true
   monitoring_network:
+    external: true
     name: monitoring_network

@@ -18,18 +18,29 @@ import (
 )
 
 type OrderItem struct {
-	ProductID string  `json:"productId"`
+	ProductID string  `json:"productId,string"`
 	Quantity  int     `json:"quantity"`
 	Price     float64 `json:"price"`
+	Name      string  `json:"productName"`
 }
 
 type Order struct {
-	ID        string      `json:"id"`
-	UserID    string      `json:"userId"`
+	ID        string      `json:"id,string"`
+	UserID    string      `json:"userId,string"`
 	Items     []OrderItem `json:"items"`
 	Total     float64     `json:"total"`
 	Status    string      `json:"status"`
 	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+}
+
+type CreateOrderRequest struct {
+	UserID string      `json:"userId,string"`
+	Items  []OrderItem `json:"items"`
+}
+
+type UpdateOrderStatusRequest struct {
+	Status string `json:"status"`
 }
 
 var orders = make(map[string][]Order)
@@ -138,6 +149,7 @@ func checkout(w http.ResponseWriter, r *http.Request) {
 		Total:     total,
 		Status:    "pending",
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if _, exists := orders[userID]; !exists {

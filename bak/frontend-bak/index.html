@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Frontend App with Faro Monitoring</title>
+  
   <style>
     .container { margin: 20px; }
     .form-group { margin: 10px 0; }
@@ -17,8 +18,88 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
   </style>
+
+
+<script>
+  (function() {
+    // Create a promise to track Faro initialization
+    window.faroReady = new Promise((resolve) => {
+      var webSdkScript = document.createElement("script");
+      webSdkScript.src = "https://unpkg.com/@grafana/faro-web-sdk@1.11.0/dist/bundle/faro-web-sdk.iife.js";
+
+      webSdkScript.onload = () => {
+        window.faro = window.GrafanaFaroWebSdk.initializeFaro({
+          url: '/collect',
+          apiKey: 'asdf',
+          app: {
+            name: 'frontend',
+            version: '1.1.0',
+            environment: 'development'
+          },
+          instrumentations: [
+            ...window.GrafanaFaroWebSdk.getWebInstrumentations(),
+          ],
+          transports: [
+            new window.GrafanaFaroWebSdk.ConsoleTransport(),
+            new window.GrafanaFaroWebSdk.FetchTransport({
+              url: '/collect',
+              apiKey: 'asdf',
+              headers: {
+                'Content-Type': 'application/vnd.faro.telemetry+json',
+                'Accept': 'application/json'
+              }
+            })
+          ],
+          meta: {
+            browser: {
+              locale: navigator.language,
+              userAgent: navigator.userAgent,
+            }
+          }
+        });
+
+        // Load tracing bundle
+        var webTracingScript = document.createElement("script");
+        webTracingScript.src = "https://unpkg.com/@grafana/faro-web-tracing@1.11.0/dist/bundle/faro-web-tracing.iife.js";
+
+        webTracingScript.onload = () => {
+          window.faro.instrumentations.add(
+            new window.GrafanaFaroWebTracing.TracingInstrumentation({
+              instrumentationOptions: {
+                propagateTraceHeaderCorsUrls: [/.*/],
+              },
+            })
+          );
+          // Resolve the promise when everything is ready
+          resolve(window.faro);
+        };
+        document.head.appendChild(webTracingScript);
+      };
+
+      document.head.appendChild(webSdkScript);
+    });
+  })();
+</script>
+
 </head>
 <body>
+
+
+  <script>
+    (function() {
+    var elasticApm = document.createElement('script');
+    elasticApm.src = "https://unpkg.com/@elastic/apm-rum@5.16.0/dist/bundles/elastic-apm-rum.umd.min.js";
+    elasticApm.onload = () => {
+      elasticApm.init({
+      serviceName: 'otel-frontend',
+      serverUrl: 'http://localhost:8200',
+      environment: 'development',
+      })
+    }
+      document.head.appendChild(elasticApm);
+    })();
+  </script>
+
   <div class="container">
     <h1>Shopping App with Monitoring</h1>
 
@@ -111,6 +192,35 @@
     </div>
   </template>
 
+  <!-- OpenTelemetry Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@opentelemetry/api@1.4.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@opentelemetry/sdk-trace-web@1.9.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@opentelemetry/exporter-trace-otlp-http@0.39.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@opentelemetry/resources@1.9.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@opentelemetry/semantic-conventions@1.9.1"></script>
+  <script>
+    // Wait for the scripts to load
+    window.addEventListener('load', () => {
+      const provider = new OpenTelemetryWeb.WebTracerProvider({
+        resource: new OpenTelemetryWeb.Resource({
+          'service.name': 'frontend-service',
+          'deployment.environment': 'development'
+        })
+      });
+      
+      const exporter = new OpenTelemetryTraceOtlpHttp.OTLPTraceExporter({
+        url: 'http://localhost:4318/v1/traces'
+      });
+      
+      provider.addSpanProcessor(new OpenTelemetryWeb.SimpleSpanProcessor(exporter));
+      provider.register();
+      
+      // Make tracer available globally
+      window.tracer = provider.getTracer('frontend-tracer');
+      
+      console.log('OpenTelemetry initialized successfully');
+    });
+  </script>
   <script type="module" src="/script.js"></script>
 </body>
 </html>
